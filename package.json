@@ -1,0 +1,41 @@
+{
+  "name": "ve-direct-charger-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard for Victron Energy MPPT chargers",
+  "bin": {
+    "ve-direct-charger-dashboard": "cli.js"
+  },
+  "scripts": {
+    "lint": "eslint **/*.js",
+    "lint:fix": "eslint --fix **/*.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "kdha200501@gmail.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://bitbucket.org/kdha200501/ve-direct-charger-dashboard.git"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@esm-bundle/moment": "^2.29.4",
+    "@esm-bundle/rxjs": "^7.5.6",
+    "moment-timezone": "^0.5.37",
+    "rxjs": "^7.5.6",
+    "serialport": "^10.4.0",
+    "ws": "^8.8.1",
+    "yargs": "^15.4.1"
+  },
+  "keywords": [
+    "Victron Energy",
+    "ve.direct USB"
+  ],
+  "devDependencies": {
+    "@types/yargs": "^15.0.9",
+    "eslint": "^7.9.0",
+    "eslint-config-prettier": "^6.11.0",
+    "eslint-plugin-prettier": "^3.1.4",
+    "husky": "^4.3.0",
+    "lint-staged": "^10.4.0",
+    "prettier": "^2.1.2"
+  }
+}

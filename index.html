@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!--Browser Reset-->
+    <style>
+      html,
+      body {
+        height: 100%;
+        min-width: 40rem;
+        font-size: 62.5%;
+        background: var(--background-color);
+        font-family: "Helvetica Neue", sans-serif;
+      }
+
+      body,
+      div,
+      span,
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+
+    <!--Layout-->
+    <style>
+      :root {
+        --background-color: #333;
+        --progress-bar-height: 3.6rem;
+
+        --solar-panel-voltage-in-mv: unset;
+        --battery-voltage-in-mv: unset;
+        --battery-current-in-ma: unset;
+        --load-current-in-ma: unset;
+        --solar-panel-power-in-w: unset;
+        --voltage-max-in-mv: unset;
+        --current-range-in-ma: unset;
+      }
+
+      .metric-container {
+        max-width: 86rem;
+      }
+
+      .metric-container + .metric-container {
+        margin-top: 6.4rem;
+      }
+
+      .metric-title {
+        color: white;
+      }
+
+      .metric {
+        padding: 3.2rem 6.4rem;
+      }
+    </style>
+
+    <!--Voltage-->
+    <style>
+      :root {
+        --voltage-lower-in-mv: min(
+          var(--battery-voltage-in-mv),
+          var(--solar-panel-voltage-in-mv)
+        );
+        --voltage-upper-in-mv: max(
+          var(--battery-voltage-in-mv),
+          var(--solar-panel-voltage-in-mv)
+        );
+
+        --voltage-lower-flex-basis: calc(
+          var(--voltage-lower-in-mv) / var(--voltage-max-in-mv) * 100%
+        );
+        --voltage-diff-flex-basis: calc(
+          (var(--voltage-upper-in-mv) - var(--voltage-lower-in-mv)) /
+            var(--voltage-max-in-mv) * 100%
+        );
+
+        --is-solar-panel-voltage-upper: calc(
+          var(--solar-panel-voltage-in-mv) / var(--voltage-upper-in-mv) - 0.5
+            /* floor */
+        );
+        --is-solar-panel-voltage-lower: calc(
+          1 - var(--is-solar-panel-voltage-upper)
+        );
+
+        --voltage-lower-in-v: calc(
+          var(--voltage-lower-in-mv) / 1000 - 0.5 /* floor */
+        );
+        --voltage-lower-in-v-first-decimal: calc(
+          (var(--voltage-lower-in-mv) - var(--voltage-lower-in-v) * 1000) / 100 -
+            0.5 /* floor */
+        );
+        --voltage-upper-in-v: calc(
+          var(--voltage-upper-in-mv) / 1000 - 0.5 /* floor */
+        );
+        --voltage-upper-in-v-first-decimal: calc(
+          (var(--voltage-upper-in-mv) - var(--voltage-upper-in-v) * 1000) / 100 -
+            0.5 /* floor */
+        );
+      }
+
+      @keyframes move {
+        0% {
+          background-position: 0 0;
+        }
+        100% {
+          background-position: 5rem 5rem;
+        }
+      }
+
+      @property --is-solar-panel-voltage-upper {
+        syntax: "<integer>";
+        initial-value: 0;
+        inherits: true;
+      }
+
+      @property --voltage-lower-in-v {
+        syntax: "<integer>";
+        initial-value: 0;
+        inherits: true;
+      }
+
+      @property --voltage-lower-in-v-first-decimal {
+        syntax: "<integer>";
+        initial-value: 0;
+        inherits: true;
+      }
+
+      @property --voltage-upper-in-v {
+        syntax: "<integer>";
+        initial-value: 0;
+        inherits: true;
+      }
+
+      @property --voltage-upper-in-v-first-decimal {
+        syntax: "<integer>";
+        initial-value: 0;
+        inherits: true;
+      }
+
+      .voltage-container {
+        position: relative;
+        padding: 0 3.6rem;
+      }
+
+      /*************************
+      *    VOLTAGE PROGRESS    *
+      *************************/
+
+      .voltage-progress {
+        display: flex;
+        height: var(--progress-bar-height);
+        padding: 1px;
+        background: #555;
+        border-radius: 4px;
+        box-shadow: inset -1px -1px 1px rgb(255 255 255 / 30%);
+      }
+
+      .progress {
+        display: flex;
+        overflow: hidden;
+      }
+
+      .progress:before {
+        --stripe: linear-gradient(
+          -45deg,
+          rgba(255, 255, 255, 0.2) 25%,
+          transparent 25%,
+          transparent 50%,
+          rgba(255, 255, 255, 0.2) 50%,
+          rgba(255, 255, 255, 0.2) 75%,
+          transparent 75%,
+          transparent
+        );
+
+        flex-grow: 0;
+        content: " ";
+        background-image: var(--stripe);
+        background-size: 5rem 5rem;
+        animation: move 2s linear infinite;
+      }
+
+      .progress--lower {
+        flex-basis: var(--voltage-lower-flex-basis);
+        background-color: var(--background-color);
+        border-top-left-radius: 4px;
+        border-bottom-left-radius: 4px;
+      }
+
+      .progress--diff {
+        flex-basis: var(--voltage-diff-flex-basis);
+        background-color: var(--background-color);
+        border-top-right-radius: 4px;
+        border-bottom-right-radius: 4px;
+      }
+
+      /*
+          Case 1: when the solar panel cannot provide maximum power (MPPT inactive) and battery is not charging
+      */
+
+      .voltage-container[data-mppt-state="0"][data-charging-state="0"]
+        .progress--lower:before {
+        /* if the battery voltage is higher than the solar panel voltage */
+        /* then show animation for the solar panel voltage */
+        flex-grow: var(--is-solar-panel-voltage-lower);
+      }
+
+      .voltage-container[data-mppt-state="0"][data-charging-state="0"]
+        .progress--diff:before {
+        /* if the solar panel voltage is higher than the battery voltage */
+        /* then show animation for the solar panel voltage */
+        flex-grow: var(--is-solar-panel-voltage-upper);
+      }
+
+      /*
+          Case 2: when the solar panel cannot provide maximum power (MPPT inactive) and battery is charging
+      */
+      .voltage-container[data-mppt-state="0"]:not([data-charging-state="0"])
+        .progress--diff:before {
+        flex-grow: var(--is-solar-panel-voltage-upper);
+      }
+
+      /*
+          Case 3: when solar panel provides maximum power (MPPT active) and battery is not charging
+      */
+
+      /*
+          Case 4: when solar panel provides maximum power (MPPT active) and battery is charging
+      */
+      .voltage-container:not([data-mppt-state="0"]):not([data-charging-state="0"])
+        .progress--lower:before {
+        /* then show animation for the solar panel voltage */
+        flex-grow: 1;
+      }
+
+      .voltage-container:not([data-mppt-state="0"])[data-charging-state="3"]
+        .progress--lower {
+        /* bulk charging state */
+        background: rgb(90, 165, 225);
+      }
+
+      .voltage-container:not([data-mppt-state="0"])[data-charging-state="4"]
+        .progress--lower {
+        /* absorption charging state */
+        background: rgb(240, 150, 46);
+      }
+
+      .voltage-container:not([data-mppt-state="0"])[data-charging-state="5"]
+        .progress--lower {
+        /* float charging state */
+        background: rgb(139, 201, 100);
+      }
+
+      /***********************
+      *    VOLTAGE AVATAR    *
+      ***********************/
+
+      .voltage-avatar {
+        position: absolute;
+        top: 0;
+        left: 3.6rem;
+        display: flex;
+        height: var(--progress-bar-height);
+        width: calc(100% - 7.2rem);
+        font-size: 2.4rem;
+      }
+
+      .avatar {
+        display: flex;
+      }
+
+      .avatar:before,
+      .avatar:after {
+        overflow: hidden;
+        flex-basis: 0;
+        display: flex;
+      }
+
+      .avatar:before {
+        content: "\1F50B"; /* the battery icon */
+      }
+
+      .avatar:after {
+        content: "\2600"; /* the sun icon */
+        color: yellow;
+      }
+
+      .avatar--lower:before,
+      .avatar--lower:after {
+        justify-content: flex-end;
+      }
+
+      .avatar--lower {
+        flex-basis: var(--voltage-lower-flex-basis);
+        flex-shrink: 0;
+      }
+
+      /*
+          The battery icon in the lower bar
+      */
+
+      .avatar--lower:before {
+        --is-battery-voltage-lower: var(--is-solar-panel-voltage-upper);
+        /*
+            if the battery voltage is lower than the solar panel voltage,
+            then show the battery icon in the lower bar
+        */
+        flex-basis: calc(100% * var(--is-battery-voltage-lower));
+        padding-right: calc(1.2rem * var(--is-battery-voltage-lower));
+      }
+
+      /*
+          The sun icon in the lower bar
+      */
+
+      .avatar--lower:after {
+        /*
+            if the solar panel voltage is lower than the battery voltage,
+            then show the sun icon in the lower bar
+        */
+        flex-basis: calc(100% * var(--is-solar-panel-voltage-lower));
+        padding-right: calc(1.2rem * var(--is-solar-panel-voltage-lower));
+      }
+
+      .avatar--diff {
+        flex-basis: var(--voltage-diff-flex-basis);
+        flex-shrink: 0;
+      }
+
+      .avatar--upper {
+        flex-shrink: 0;
+      }
+
+      .avatar--upper:before,
+      .avatar--upper:after {
+        justify-content: flex-start;
+      }
+
+      /*
+          The battery icon in the upper bar
+      */
+
+      .avatar--upper:before {
+        --is-battery-voltage-upper: var(--is-solar-panel-voltage-lower);
+        /*
+            if the battery voltage is higher than the solar panel voltage,
+            then show the battery icon in the upper bar
+        */
+        flex-basis: calc(100% * var(--is-battery-voltage-upper));
+        padding-left: calc(1.2rem * var(--is-battery-voltage-upper));
+      }
+
+      /*
+          The sun icon in the upper bar
+      */
+
+      .avatar--upper:after {
+        /*
+            if the solar panel voltage is higher than the battery voltage,
+            then show the sun icon in the upper bar
+        */
+        flex-basis: calc(100% * var(--is-solar-panel-voltage-upper));
+        padding-left: calc(1.2rem * var(--is-solar-panel-voltage-upper));
+      }
+
+      /**********************
+      *    VOLTAGE METER    *
+      **********************/
+      .voltage-meter {
+        position: absolute;
+        top: calc(var(--progress-bar-height) + 0.5rem);
+        left: 3.6rem;
+        display: flex;
+        height: 2.4rem;
+        width: calc(100% - 7.2rem);
+        font-size: 1.8rem;
+        color: white;
+      }
+
+      .meter--lower {
+        flex-basis: var(--voltage-lower-flex-basis);
+        flex-shrink: 0;
+      }
+
+      .meter--lower:before {
+        display: flex;
+        justify-content: flex-end;
+        padding-right: 1.2rem;
+        counter-set: voltage-lower var(--voltage-lower-in-v)
+          voltage-lower-decimal var(--voltage-lower-in-v-first-decimal);
+        content: counter(voltage-lower) "." counter(voltage-lower-decimal) "V";
+      }
+
+      .meter--diff {
+        flex-basis: var(--voltage-diff-flex-basis);
+        flex-shrink: 0;
+      }
+
+      .meter--upper {
+        flex-shrink: 0;
+      }
+
+      .meter--upper:before {
+        display: flex;
+        justify-content: flex-start;
+        padding-left: 1.2rem;
+        counter-set: voltage-upper var(--voltage-upper-in-v)
+          voltage-upper-decimal var(--voltage-upper-in-v-first-decimal);
+        content: counter(voltage-upper) "." counter(voltage-upper-decimal) "V";
+      }
+    </style>
+
+    <!--Current-->
+    <style>
+      :root {
+        --radius: 10rem;
+        --battery-current-polarity: calc(
+          max(var(--battery-current-in-ma), -1) /
+            max(var(--battery-current-in-ma), 1)
+        ); /* 1 or -1*/
+        --battery-current-in-a-abs: calc(
+          var(--battery-current-polarity) * var(--battery-current-in-ma) / 1000 -
+            0.5 /* floor */
+        );
+        --battery-current-in-a-first-decimal: calc(
+          (
+              var(--battery-current-polarity) * var(--battery-current-in-ma) -
+                var(--battery-current-in-a-abs) * 1000
+            ) / 100 - 0.5 /* floor */
+        );
+        --load-current-in-a: calc(
+          var(--load-current-in-ma) / 1000 - 0.5 /* floor */
+        );
+        --load-current-in-a-first-decimal: calc(
+          (var(--load-current-in-ma) - var(--load-current-in-a) * 1000) / 100 -
+            0.5 /* floor */
+        );
+        --total-current-in-ma: max(
+          calc(var(--battery-current-in-ma) + var(--load-current-in-ma)),
+          0
+        );
+        --total-current-in-a: calc(
+          var(--total-current-in-ma) / 1000 - 0.5 /* floor */
+        );
+        --total-current-in-a-first-decimal: calc(
+          (var(--total-current-in-ma) - var(--total-current-in-a) * 1000) / 100 -
+            0.5 /* floor */
+        );
+
+        --angle-offset-in-deg: calc(
+          max(
+              var(--battery-current-in-ma),
+              0 /* display battery current on the left when it's negative */
+            ) / var(--current-range-in-ma) * 180
+        );
+        --battery-current-mask-angle-in-deg: calc(
+          -1 * var(--battery-current-polarity) /* ensure the angle is negative */ *
+            var(--battery-current-in-ma) / var(--current-range-in-ma) * 180
+        );
+        --load-current-mask-angle-in-deg: calc(
+          var(--load-current-in-ma) / var(--current-range-in-ma) * 180
+        );
+      }
+
+      @property --battery-current-polarity {
+        syntax: "<integer>";
+        initial-value: 0;
+        inherits: true;
+      }
+
+      @property --battery-current-in-a-abs {
+        syntax: "<integer>";
+        initial-value: 0;
+        inherits: true;
+      }
+
+      @property --battery-current-in-a-first-decimal {
+        syntax: "<integer>";
+        initial-value: 0;
+        inherits: true;
+      }
+
+      @property --load-current-in-a {
+        syntax: "<integer>";
+        initial-value: 0;
+        inherits: true;
+      }
+
+      @property --load-current-in-a-first-decimal {
+        syntax: "<integer>";
+        initial-value: 0;
+        inherits: true;
+      }
+
+      @property --total-current-in-a {
+        syntax: "<integer>";
+        initial-value: 0;
+        inherits: true;
+      }
+
+      @property --total-current-in-a-first-decimal {
+        syntax: "<integer>";
+        initial-value: 0;
+        inherits: true;
+      }
+
+      .current-container {
+        position: relative;
+      }
+
+      .current-progress-container {
+        display: inline-block;
+        padding-left: 3.6rem;
+        padding-right: 3.6rem;
+        position: relative;
+        background: var(--background-color);
+        overflow: hidden;
+      }
+
+      .current-progress {
+        position: relative;
+        width: calc(var(--radius) * 2);
+        height: calc(var(--radius) * 2);
+        margin-bottom: calc(0rem - var(--radius));
+        border-radius: 50%;
+        border: 1px solid #555;
+        background-image: linear-gradient(to right, #16c00c 50%, #ffd679 0);
+        transform: rotate(calc(var(--angle-offset-in-deg) * 1deg));
+      }
+
+      .current-progress:before,
+      .current-progress:after {
+        position: absolute;
+        top: -1px;
+        left: -1px;
+        width: calc(100% + 2px);
+        height: calc(100% + 2px);
+        border-radius: 50%;
+        box-shadow: inset -1px 0px 2px rgb(255 255 255 / 30%);
+        backface-visibility: hidden;
+      }
+
+      .current-progress:before {
+        content: "";
+        background-image: linear-gradient(to right, #555 50%, transparent 0);
+        transform: rotate(
+          calc(var(--battery-current-mask-angle-in-deg) * 1deg)
+        );
+      }
+
+      .current-progress:after {
+        content: "";
+        background-image: linear-gradient(to right, transparent 50%, #555 0);
+        transform: rotate(calc(var(--load-current-mask-angle-in-deg) * 1deg));
+      }
+
+      .current-state {
+        --mask-radius: calc(var(--radius) * 2 - var(--progress-bar-height) * 2);
+
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        top: var(--progress-bar-height);
+        left: calc(var(--progress-bar-height) + 3.6rem);
+        height: var(--mask-radius);
+        width: var(--mask-radius);
+        border-radius: 50%;
+        border: 1px solid #555;
+        background: var(--background-color);
+        backface-visibility: hidden;
+      }
+
+      .current-state:before {
+        flex-basis: 50%;
+        counter-set: total-current var(--total-current-in-a)
+          total-current-decimal var(--total-current-in-a-first-decimal);
+        content: "\2600\00a0"counter(total-current) "." counter(
+            total-current-decimal
+          ) "A"; /* the sun icon */
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        font-size: 1.8rem;
+        color: white;
+      }
+
+      .current-state:after {
+        content: "";
+        flex-basis: 50%;
+      }
+
+      .current-meter {
+        position: absolute;
+        height: calc(var(--radius));
+        width: calc(var(--radius) * 2);
+        top: 0;
+        left: 3.6rem;
+      }
+
+      .meter--battery-current,
+      .meter--load-current {
+        --cos-term2: calc(var(--sin-term1) * var(--sin-term1) / 2);
+        --sin-term2: calc(var(--cos-term2) * var(--sin-term1) / 3);
+        --cos-term3: calc(var(--sin-term2) * var(--sin-term1) / 4);
+        --sin-term3: calc(var(--cos-term3) * var(--sin-term1) / 5);
+        --cos-term4: calc(var(--sin-term3) * var(--sin-term1) / 6);
+        --sin-term4: calc(var(--cos-term4) * var(--sin-term1) / 7);
+        --cos-term5: calc(var(--sin-term4) * var(--sin-term1) / 8);
+        --sin-term5: calc(var(--cos-term5) * var(--sin-term1) / 9);
+
+        /* Series expansion for sine and cosine */
+        --sin: calc(
+          var(--sin-term1) - var(--sin-term2) + var(--sin-term3) -
+            var(--sin-term4) + var(--sin-term5)
+        );
+        --cos: calc(
+          1 - var(--cos-term2) + var(--cos-term3) - var(--cos-term4) +
+            var(--cos-term5)
+        );
+      }
+
+      .meter--battery-current {
+        --sin-term1: calc(
+          var(--battery-current-in-ma) / var(--current-range-in-ma) *
+            3.141592653589793238 /* Pi */
+        ); /* angle in radians */
+        position: absolute;
+        right: calc(
+          max(calc(var(--radius) - var(--radius) * var(--sin)), var(--radius)) +
+            0.5rem
+        );
+        bottom: calc(var(--radius) * var(--cos));
+        display: flex;
+        line-height: 1;
+        font-size: 1.8rem;
+        color: white;
+        white-space: pre;
+      }
+
+      .meter--battery-current:before {
+        flex-basis: calc((var(--battery-current-polarity) / -2 + 0.5) * 100%);
+        overflow: hidden;
+        content: "\2212";
+      }
+
+      .meter--battery-current:after {
+        counter-set: battery-current var(--battery-current-in-a-abs)
+          battery-current-decimal var(--battery-current-in-a-first-decimal);
+        content: counter(battery-current) "." counter(battery-current-decimal)
+          "A \1F50B"; /* the battery icon */
+      }
+
+      .meter--load-current {
+        --sin-term1: calc(
+          (
+              var(--load-current-in-ma) / var(--current-range-in-ma) +
+                var(--angle-offset-in-deg) / 180
+            ) * 3.141592653589793238 /* Pi */
+        ); /* angle in radians */
+        position: absolute;
+        left: calc(var(--radius) + var(--radius) * var(--sin));
+        bottom: calc(var(--radius) * var(--cos));
+        line-height: 1;
+      }
+
+      .meter--load-current:before {
+        counter-set: load-current var(--load-current-in-a) load-current-decimal
+          var(--load-current-in-a-first-decimal);
+        content: " \1f4a1"counter(load-current) "." counter(
+            load-current-decimal
+          ) "A"; /* the battery icon */
+        position: absolute;
+        left: 0.5rem;
+        bottom: 0;
+        font-size: 1.8rem;
+        color: white;
+        text-align: right;
+        white-space: pre;
+      }
+    </style>
+
+    <!--Power-->
+    <style>
+      :root {
+        --load-power-in-w: calc(
+          var(--battery-voltage-in-mv) * var(--load-current-in-ma) / 1000000
+        );
+      }
+
+      .solar-panel-power-container,
+      .load-power-container {
+        padding: 0 3.6rem;
+      }
+
+      .solar-panel-power-container:before,
+      .load-power-container:before {
+        padding: 1rem;
+        border-radius: 4px;
+        font-size: 1.8rem;
+        color: white;
+        background: #555;
+      }
+
+      .solar-panel-power-container:before {
+        counter-set: solar-panel-power var(--solar-panel-power-in-w);
+        content: counter(solar-panel-power) "W";
+      }
+
+      .load-power-container[data-load-state="ON"]:before {
+        counter-set: load-power var(--load-power-in-w);
+        content: counter(load-power) "W";
+      }
+
+      .load-power-container[data-load-state="OFF"]:before {
+        content: "Disabled";
+      }
+    </style>
+  </head>
+  <body>
+    <!--Voltage metrics-->
+    <div class="metric-container">
+      <h1 class="metric-title">Solar panel voltage</h1>
+      <section class="metric">
+        <div class="voltage-container">
+          <section class="voltage-progress">
+            <span class="progress progress--lower"></span>
+            <span class="progress progress--diff"></span>
+          </section>
+          <section class="voltage-avatar">
+            <span class="avatar avatar--lower"></span>
+            <span class="avatar--diff"></span>
+            <span class="avatar avatar--upper"></span>
+          </section>
+          <section class="voltage-meter">
+            <span class="meter--lower"></span>
+            <span class="meter--diff"></span>
+            <span class="meter--upper"></span>
+          </section>
+        </div>
+      </section>
+    </div>
+
+    <!--Current metrics-->
+    <div class="metric-container">
+      <h1 class="metric-title">Solar panel current</h1>
+      <section class="metric">
+        <div class="current-container">
+          <div class="current-progress-container">
+            <section class="current-progress"></section>
+            <section class="current-state"></section>
+          </div>
+          <section class="current-meter">
+            <span class="meter--battery-current"></span>
+            <span class="meter--load-current"></span>
+          </section>
+        </div>
+      </section>
+    </div>
+
+    <!--Power metrics-->
+    <div class="metric-container">
+      <h1 class="metric-title">Solar panel power</h1>
+      <section class="metric">
+        <div class="solar-panel-power-container"></div>
+      </section>
+    </div>
+    <div class="metric-container">
+      <h1 class="metric-title">Load power</h1>
+      <section class="metric">
+        <div class="load-power-container"></div>
+      </section>
+    </div>
+
+    <!--Main-->
+    <script type="module">
+      const { pathname } = window.location;
+
+      // app configs and external libraries
+      const [
+        { voltageMaxInMv, currentRangeInMA },
+        rxjs,
+        rxjsOperators,
+        moment,
+      ] = await Promise.all([
+        fetch(`${pathname}config.json`, {
+          // bypass the cache completely
+          cache: "no-store",
+        }).then((response) => (response.ok ? response.json() : {})),
+        import(`${pathname}node_modules/@esm-bundle/rxjs/esm/es2015/rxjs.min.js`),
+        import(`${pathname}node_modules/@esm-bundle/rxjs/esm/es2015/rxjs-operators.min.js`),
+        import(`${pathname}node_modules/@esm-bundle/moment/esm/index.js`),
+      ]);
+
+      document.documentElement.style.setProperty(
+        "--voltage-max-in-mv",
+        voltageMaxInMv
+      );
+      document.documentElement.style.setProperty(
+        "--current-range-in-ma",
+        currentRangeInMA
+      );
+
+      // helper classes
+      function DataBinding() {
+        const voltageContainerElement =
+          document.querySelector(".voltage-container");
+        const loadPowerContainerElement = document.querySelector(
+          ".load-power-container"
+        );
+        return (() => {
+          const bindData = (log) => {
+            const fields = log.split("\n");
+
+            for (const field of fields) {
+              const [key, val] = field.split("\t").map((text) => text.trim());
+              let cssVariable;
+              switch (key) {
+                case "V":
+                  cssVariable = "--battery-voltage-in-mv";
+                  break;
+                case "I":
+                  cssVariable = "--battery-current-in-ma";
+                  break;
+                case "VPV":
+                  cssVariable = "--solar-panel-voltage-in-mv";
+                  break;
+                case "PPV":
+                  cssVariable = "--solar-panel-power-in-w";
+                  break;
+                case "IL":
+                  cssVariable = "--load-current-in-ma";
+                  break;
+                case "CS":
+                  voltageContainerElement.setAttribute(
+                    "data-charging-state",
+                    val
+                  );
+                  continue;
+                case "MPPT":
+                  voltageContainerElement.setAttribute("data-mppt-state", val);
+                  continue;
+                case "LOAD":
+                  loadPowerContainerElement.setAttribute(
+                    "data-load-state",
+                    val
+                  );
+                  continue;
+                default:
+                  // no-op
+                  continue;
+              }
+              document.documentElement.style.setProperty(cssVariable, val);
+            }
+          };
+          return { bindData };
+        })(/* Dependency injections */);
+      }
+
+      // main
+      ((
+        { ReplaySubject, interval, concat },
+        { takeUntil, shareReplay, skip, switchMap },
+        moment,
+        DataBinding
+      ) => {
+        const dataBinding = new DataBinding();
+
+        const { protocol, hostname, port, pathname } = window.location;
+
+        const ws = new WebSocket(
+          `${
+            protocol === "https:" ? "wss" : "ws"
+          }://${hostname}:${port}${pathname}/ws`
+        );
+
+        const logPromise$ = new ReplaySubject(1);
+        ws.onmessage = ({ data }) =>
+          logPromise$.next(data.text() /* promise */);
+
+        const isWsReady$ = new ReplaySubject(1);
+        const tick$ = interval(50).pipe(takeUntil(isWsReady$), shareReplay(1));
+
+        // subscriptions
+        tick$.subscribe(() => {
+          if (ws.readyState) {
+            isWsReady$.next(true);
+            isWsReady$.complete();
+          }
+        });
+        concat(isWsReady$, logPromise$)
+          .pipe(
+            skip(1),
+            switchMap((logPromise) => logPromise)
+          )
+          .subscribe(dataBinding.bindData);
+      })(
+        rxjs,
+        rxjsOperators,
+        moment.default,
+        DataBinding /* Dependency injections */
+      );
+    </script>
+  </body>
+</html>
