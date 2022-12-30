@@ -8,8 +8,8 @@ UI preview on CodePen: https://codepen.io/kdha200501/pen/QWmmzKx
 ### Installation
 ```shell
 $ npm i -g ve-direct-charger-dashboard
-$ mkdir ve-direct-charger-dashboard
-$ cd ve-direct-charger-dashboard
+$ mkdir ve-direct
+$ cd ve-direct
 $ ve-direct-charger-dashboard
 ```
 
