@@ -216,7 +216,12 @@ const server = createServer(({ url }, response) => {
 
   if (urlLowerCase === '/config.json') {
     response.writeHeader(200, { 'Content-Type': 'application/json' });
-    response.write(readFileSync(join(cliAppConfig.cwd, 'config.json'), 'utf8'));
+    const { uiConfigFileName } =
+      // eslint-disable-next-line global-require
+      require('./const');
+    response.write(
+      readFileSync(join(cliAppConfig.cwd, uiConfigFileName), 'utf8')
+    );
     response.end();
     return;
   }
