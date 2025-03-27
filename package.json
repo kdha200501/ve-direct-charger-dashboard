@@ -1,6 +1,6 @@
 {
   "name": "ve-direct-charger-dashboard",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Dashboard for Victron Energy MPPT chargers",
   "bin": {
     "ve-direct-charger-dashboard": "cli.js"
