@@ -13,7 +13,7 @@
   "author": "kdha200501@gmail.com",
   "repository": {
     "type": "git",
-    "url": "git+https://bitbucket.org/kdha200501/ve-direct-charger-dashboard.git"
+    "url": "https://github.com/kdha200501/ve-direct-charger-dashboard"
   },
   "license": "ISC",
   "dependencies": {
